@@ -1,0 +1,7 @@
+name = "Stage4MakieLive"
+uuid = "f334b414-bb47-49b3-b967-9ff4f3e8a77e"
+authors = ["chumnap thach <you@example.com>"]
+version = "0.1.0"
+
+[deps]
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"

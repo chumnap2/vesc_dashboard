@@ -1,0 +1,29 @@
+# === Julia ===
+*.jl.cov
+*.jl.*.cov
+*.ji
+Manifest.toml
+
+# === F Prime / Python ===
+fprime-venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# === Build & cache directories ===
+build*/
+dist/
+.fprime-cache/
+*.o
+*.so
+*.bin
+*.log
+
+# === System / Editors ===
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# === Makie cache ===
+.julia/
