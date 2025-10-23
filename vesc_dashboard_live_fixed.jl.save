@@ -1,0 +1,97 @@
+#################################################
+# vesc_dashboard_live_fixed.jl
+# VESC Live Dashboard for Julia + pyvesc 2.x
+# Real-time telemetry + SetRPM / SetDuty
+#################################################
+
+using PyCall
+using Dates
+
+# --- VESC connection settings ---
+port = "/dev/ttyACM0"
+baud = 115200
+
+# --- Motor settings ---
+max_rpm = 5000        # adjust for your motor
+max_duty = 1.0        # duty cycle [-1.0, 1.0]
+
+# --- Import Python modules and connect ---
+py"""
+import pyvesc
+import serial
+
+ser = serial.Serial(port=$port, baudrate=$baud)
+
+# --- Helper Python functions ---
+def send_rpm_py(val, ser):
+    msg = pyvesc.SetRPM(int(val))
+    ser.write(pyvesc.encode(msg))
+
+def send_duty_py(val, ser):
+    msg = pyvesc.SetDuty(float(val))
+    ser.write(pyvesc.encode(msg))
+
+def read_telemetry(ser):
+    if ser.in_waiting > 0:
+        raw = ser.read(ser.in_waiting)
+        msg = pyvesc.decode(raw)
+        if msg is not None:
+            return dict(msg.__dict__)
+    return None
+"""
+
+# --- Bind Python functions ---
+send_rpm_py = py"send_rpm_py"
+send_duty_py = py"send_duty_py"
+read_telemetry = py"read_telemetry"
+
+println("=== VESC Live Dashboard (pyvesc 2.x) ===")
+println("Connected to $port at $baud bps")
+println("Press Ctrl+C to stop.")
+
+# --- Julia helpers ---
+function send_rpm(rpm::Int)
+    rpm_val = clamp(rpm, -max_rpm, max_rpm)
+    send_rpm_py(rpm_val, py"ser")
+    println("Sent RPM: $rpm_val")
+end
+
+function send_duty(duty::Float64)
+    duty_val = clamp(duty, -max_duty, max_duty)
+    send_duty_py(duty_val, py"ser")
+    println("Sent Duty: $(round(duty_val, digits=3))")
+end
+
+# --- Main loop ---
+while true
+    try
+        # --- User input ---
+        print("Enter RPM (or Enter to skip): ")
+        rpm_input = readline()
+        if !isempty(rpm_input)
+            rpm = parse(Int, rpm_input)
+            send_rpm(rpm)
+        end
+
+        print("Enter Duty [-1.0..1.0] (or Enter to skip): ")
+        duty_input = readline()
+        if !isempty(duty_input)
+            duty = parse(Float64, duty_input)
+            send_duty(duty)
+        end
+
+        # --- Read telemetry ---
+        telemetry = read_telemetry(py"ser")
+        if telemetry !== nothing
+            println("---- TELEMETRY ----")
+            for (k,v) in telemetry
+                println(k, ": ", v)
+            end
+        else
+            println("No telemetry available...")
+        end
+
+    catch e
+        println("[ERROR] ", e)
+    end
+end
