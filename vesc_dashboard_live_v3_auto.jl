@@ -1,16 +1,17 @@
 using SerialPorts
 using Printf
 using Dates
-#using Threads
-import .Threads
+using CSV
+using Tables
 
 # -----------------------------
 # Configuration
 # -----------------------------
 baudrate = 115200
-update_interval = 0.2   # seconds between telemetry updates
+update_interval = 0.2   # seconds
 max_rpm = 5000
 max_duty = 1.0
+log_file = "vesc_telemetry_log.csv"
 
 # -----------------------------
 # Auto-port + reconnect
@@ -39,13 +40,11 @@ end
 # Command helpers
 # -----------------------------
 function send_rpm(sp, rpm)
-    rpm = clamp(rpm, -max_rpm, max_rpm)
-    write(sp, "RPM:$rpm\n")
+    write(sp, "RPM:$(clamp(rpm, -max_rpm, max_rpm))\n")
 end
 
 function send_duty(sp, duty)
-    duty = clamp(duty, -max_duty, max_duty)
-    write(sp, "DUTY:$duty\n")
+    write(sp, "DUTY:$(clamp(duty, -max_duty, max_duty))\n")
 end
 
 # -----------------------------
@@ -68,47 +67,59 @@ function read_telemetry(sp)
 end
 
 # -----------------------------
-# Start serial + telemetry loop
+# Terminal helpers
+# -----------------------------
+function clear_terminal()
+    print("\033[2J\033[H")
+end
+
+function print_dashboard(data)
+    clear_terminal()
+    println("=== VESC Live Telemetry Dashboard ===")
+    println("-------------------------------------")
+    @printf("RPM:         %8.2f\n", data[:rpm])
+    @printf("Duty Cycle:  %8.2f %%\n", data[:duty])
+    @printf("Voltage:     %8.2f V\n", data[:voltage])
+    @printf("Temperature: %8.2f °C\n", data[:temp])
+    println("-------------------------------------")
+    println("Type commands: rpm <value>  |  duty <value>  |  quit")
+end
+
+# -----------------------------
+# Main loop
 # -----------------------------
 sp = connect_vesc()
-println("Starting terminal dashboard... Ctrl+C to stop")
-println("Type commands like:  rpm 2000   or   duty 0.3\n")
-
+println("Starting terminal dashboard with CSV logging...")
 telemetry_data = Ref((0.0, 0.0, NaN, NaN))
 running = Ref(true)
 
-# telemetry thread
+# Storage for CSV
+log_buffer = Vector{NamedTuple{(:Timestamp, :RPM, :Duty, :Voltage, :Temp), Tuple{String, Float64, Float64, Float64, Float64}}}()
+
+# Telemetry thread
 Threads.@spawn begin
     start_time = time()
     while running[]
-        try
-            t = read_telemetry(sp)
-            if t !== nothing
-                telemetry_data[] = t
-                rpm, duty, volt, temp = t
-                elapsed = time() - start_time
-                @printf "\r[%.1fs] RPM=%7.1f | Duty=%5.2f | Volt=%6.2f | Temp=%5.1f °C " elapsed rpm duty volt temp
-                flush(stdout)
-            end
-        catch
-            println("\n[ERROR] Serial read failed — reconnecting...")
-            try close(sp) catch end
-            sp = connect_vesc()
+        t = read_telemetry(sp)
+        if t !== nothing
+            rpm, duty, volt, temp = t
+            elapsed = time() - start_time
+            telemetry_data[] = t
+            # Append to log buffer
+            push!(log_buffer, (string(Dates.now()), rpm, duty, volt, temp))
+            print_dashboard(Dict(:rpm=>rpm, :duty=>duty, :voltage=>volt, :temp=>temp))
         end
         sleep(update_interval)
     end
 end
 
-# -----------------------------
 # Command input loop
-# -----------------------------
 try
     while true
-        print("\n> "); flush(stdout)
+        print("> "); flush(stdout)
         input = readline(stdin)
         parts = split(strip(input))
         isempty(parts) && continue
-
         cmd = lowercase(parts[1])
         if cmd == "rpm" && length(parts) == 2
             send_rpm(sp, parse(Float64, parts[2]))
@@ -116,18 +127,21 @@ try
         elseif cmd == "duty" && length(parts) == 2
             send_duty(sp, parse(Float64, parts[2]))
             println("→ Duty command sent.")
-        elseif cmd in ["exit", "quit", "q"]
+        elseif cmd in ["quit", "q"]
             println("Stopping dashboard...")
             running[] = false
             break
         else
-            println("Unknown command. Try: rpm <value>, duty <value>, or quit")
+            println("Unknown command. Try: rpm <value>, duty <value>, quit")
         end
     end
 catch e
     println("\nStopping dashboard due to error: $e")
 finally
     running[] = false
-    try CSV.write("vesc_log.csv", df) catch end
+    sleep(0.3)  # wait for thread to finish
     try close(sp) catch end
+    # Write CSV
+    CSV.write(log_file, log_buffer)
+    println("Telemetry saved to $log_file")
 end
