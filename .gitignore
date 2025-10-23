@@ -27,3 +27,4 @@ dist/
 
 # === Makie cache ===
 .julia/
+vesc_telemetry_log.csv
