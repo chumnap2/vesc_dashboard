@@ -1,37 +1,18 @@
-# Stage4MakieLive — Real-Time RPM & Position Telemetry with Makie.jl
+# VESC Terminal Dashboard (Stage 6c)
 
-This project simulates a live telemetry system for a motor controller using
-**Julia** + **Makie.jl** visualization, inspired by NASA F´ (F Prime) architecture.
+This project provides a **live terminal dashboard** for VESC telemetry.
 
----
+## Features (Stage 6c)
+- Real-time numeric telemetry display (RPM, Duty, Voltage, Temperature)
+- Interactive command input:
+  - `rpm <value>` → set target RPM
+  - `duty <value>` → set duty cycle
+  - `quit` → exit dashboard
+- Automatic serial reconnect if VESC disconnects
+- Terminal-only, minimal dependencies (SerialPorts, Printf, Dates)
 
-## 🚀 Features
-- Real-time RPM and Position simulation loop  
-- Live updating plots using `GLMakie`  
-- Interactive console input to change target RPM  
-- Thread-safe updates with asynchronous command listener  
+## Usage
+```bash
+julia vesc_dashboard_live_v3_auto.jl
 
----
-
-## 🧩 Requirements
-- Julia ≥ 1.10
-- `GLMakie.jl`
-
-Install dependencies:
-```julia
-using Pkg
-Pkg.activate(".")
-Pkg.instantiate()
-
-▶️ Run
-julia stage4_makie_live_fixed.jl
-
-📡 Example
-
-When running, you’ll see:
-Enter new target RPM: 200
-[TELEMETRY] RPM=200.0 Pos=120.3
-
-⚖️ License
-
-MIT License © 2025 chumnap thach
+Then type commands in the terminal to control the VESC.
